@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script type="text/javascript" src="http://code.jquery.com/jquery.min.js"></script>
+</head>
+<body>
+
+<div id="game_frame" style="margin: 0 auto; width: 320px; position: relative;">
+  <canvas id="spinlocker" width="320" height="500" style="border:1px solid #d3d3d3;">
+    Your browser does not support the HTML5 canvas tag.
+  </canvas>
+  <br>
+  Nombre d'essai(s) restant(s) : <div id="countdown"></div>
+
+  <div id="gameover" style="display: none; position: absolute; top: 50%; left: 50%; text-align: center; line-height: 100px; width: 200px; height: 100px; margin-left: -100px; margin-top: -50px; background-color: #88ddfc; border: 3px solid #339fd6;">
+    You lose!
+    <a href="javascript:history.go(0)">Retry?</a>
+  </div>
+  <div id="won" style="display: none; position: absolute; top: 50%; left: 50%; text-align: center; line-height: 100px; width: 200px; height: 100px; margin-left: -100px; margin-top: -50px; background-color: #bfffc7; border: 3px solid #49dd69;">
+    You win!
+    <a href="javascript:history.go(0)">New game?</a>
+  </div>
+</div>
+<script>
+
+  $(function(){
+
+    // GLOBALS
+    var circles_array = [],
+        refresh_interval_id;
+
+    $(document).on("keypress", function (e) {
+      if (e.charCode == 32) {
+        $(document).trigger("custom.spacebar");
+      }
+    });
+
+    $(document).on("custom.spacebar", function (e) {
+      var time = new Date();
+
+      for (var i = 0; i < circles_array.length - 1; i++) {
+        circle_angle_1 = (((2 * Math.PI) / 6) * time.getSeconds() * circles_array[i].speed + ((2 * Math.PI) / 6000) * time.getMilliseconds() * circles_array[i].speed + circles_array[i].angle)  * (180 / Math.PI) % 360;
+        circle_angle_2 = (((2 * Math.PI) / 6) * time.getSeconds() * circles_array[i + 1].speed + ((2 * Math.PI) / 6000) * time.getMilliseconds() * circles_array[i + 1].speed + circles_array[i + 1].angle)  * (180 / Math.PI) % 360;
+        if (circle_angle_1 - circle_angle_2 < 10 && circle_angle_1 - circle_angle_2 > -10) {
+          circles_array[i + 1].speed = circles_array[i].speed;
+          circles_array[i + 1].angle = circles_array[i].angle;
+        }
+      }
+
+      if (is_game_won()) {
+        $(document).trigger("custom.won");
+        return ;
+      }
+
+      countdown = parseInt($("#countdown").html());
+      $("#countdown").html(countdown - 1)
+      if (countdown <= 1) {
+        $(document).trigger("custom.gameover");
+        return ;
+      }
+    });
+
+    $(document).on("custom.gameover", function (e) {
+      $("#gameover").slideDown();
+      clearInterval(refresh_interval_id);
+    });
+
+    $(document).on("custom.won", function (e) {
+      $("#won").slideDown();
+      clearInterval(refresh_interval_id);
+    });
+
+    init();
+    // draw();
+
+    function init(){
+      var number_of_circles = Math.floor((Math.random() * 7) + 2);
+      circles_array = createCircles(number_of_circles);
+      $("#countdown").html(5);
+      refresh_interval_id = setInterval(draw, 20);
+    }
+
+    function draw() {
+      var canvas = document.getElementById("spinlocker"),
+          context = canvas.getContext("2d"),
+          data = { canvas: canvas, context: context },
+          time = new Date();
+
+      // context.globalCompositeOperation = 'destination-over';
+      context.clearRect(0, 0, canvas.width, canvas.height);
+
+      context.save();
+
+      context.translate(canvas.width / 2, canvas.height / 2);
+
+      circles_array.forEach(function (value, index, array) {
+        rotatingCircle(data, time, value.angle, value.speed, { radius: value.radius, e_angle: 2 * Math.PI * 0.9 })
+      });
+
+      context.restore();
+    }
+
+    // LIBRARY
+
+    function createCircles(circle_number) {
+      var circles_array = [],
+          circle = {},
+          previous_radiuses = [];
+
+      for (var i = 0; i < circle_number; i++) {
+        circle = {
+          radius: Math.floor((Math.random() * 10) + 2) * 10,
+          angle: Math.floor((Math.random() * 100) + 0),
+          speed: Math.floor((Math.random() * 5) + 1)
+        };
+
+        while ($.inArray(circle.radius, previous_radiuses) != -1) {
+          circle.radius = Math.floor((Math.random() * 5) + 2) * 10;
+        }
+        previous_radiuses.push(circle.radius);
+
+        circles_array.push(circle);
+      }
+      return circles_array.sort(function (a, b) { return a.radius - b.radius });
+    }
+
+    function rotatingCircle(data, time, angle, speed_coef, circle_options) {
+      data.context.save();
+      data.context.rotate(((2 * Math.PI) / 6) * time.getSeconds() * speed_coef + ((2 * Math.PI) / 6000) * time.getMilliseconds() * speed_coef + angle)
+      createCircle(data, circle_options);
+      data.context.restore();
+    }
+
+    function createCircle(data, options) {
+      var defaults = {
+        center_x: 0,
+        center_y: 0,
+        radius: 70,
+        fill: 'transparent',
+        line_width: 5,
+        stroke: 'red',
+        s_angle: 0,
+        e_angle: 2 * Math.PI
+      }, options = $.extend({}, defaults, options);
+
+      data.context.beginPath();
+      data.context.arc(options.center_x, options.center_y, options.radius, options.s_angle, options.e_angle, false);
+      data.context.fillStyle = options.fill;
+      data.context.fill();
+      data.context.lineWidth = options.line_width;
+      data.context.strokeStyle = options.stroke;
+      data.context.stroke();
+    };
+
+    function is_game_won() {
+      var win_flag = true;
+
+      for (var i = 0; i < circles_array.length - 1; i++) {
+        if (circles_array[i + 1].speed != circles_array[i].speed || circles_array[i + 1].angle != circles_array[i].angle) {
+          win_flag = false;
+        }
+      }
+
+      return win_flag;
+    }
+
+  }); // end $(function(){});
+
+</script>
+
+</body>
+</html>
